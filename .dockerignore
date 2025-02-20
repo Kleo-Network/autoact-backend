@@ -1,0 +1,6 @@
+scripts
+.env
+.env.example
+dockerfiles
+.git
+**/__pycache__/
