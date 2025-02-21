@@ -1,6 +1,7 @@
-# KLEO Backend
+# AutoAct Backend
 
-KLEO Backend is a FastAPI application that serves as the backend for the KLEO project.
+AutoAct Backend is a FastAPI application that serves as the backend for autoact chrome extension, its' 
+from the same team as Kleo Network
 
 ## Table of Contents
 
