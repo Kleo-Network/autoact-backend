@@ -2,7 +2,7 @@
 from app.mongodb import close_db_connection
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.user_v1 import router as user_router
+from app.api.form import router as form_router
 from app.settings import settings
 from app.logging_config import setup_logging, logger
 import redis.asyncio as redis
@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 # Include the API routers
-app.include_router(user_router, prefix="/api/v1/user")
+app.include_router(form_router, prefix="/api/v1/form")
 
 Instrumentator().instrument(app).expose(app)
 

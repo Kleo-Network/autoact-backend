@@ -3,14 +3,14 @@ import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from app.models import Form, CreateFormRequest
+from app.models.form import Form, CreateFormRequest
 from app.mongodb import get_forms
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/form/{domain}", response_model=dict)
+@router.post("/{domain}", response_model=dict)
 async def get_or_create_form(domain: str, dom: str):
     """
     Get an existing form by domain or create it if not found.
@@ -24,21 +24,13 @@ async def get_or_create_form(domain: str, dom: str):
         existing_form = await forms_collection.find_one({"domain": domain})
         
         if existing_form:
-            # Form exists, return it
             return JSONResponse(content=existing_form)
         
-        # Form doesn't exist, create it if form_request is provided
-        if form_request:
-            # Ensure domain in URL matches domain in request body
-            if domain != form_request.domain:
-                form_request.domain = domain
-                
-            form = Form(
-                domain=domain,
-                mapping=form_request.mapping,
-                parent_container=form_request.parent_container
-            )
-            result = await form.save()
+        
+        #1. filter out the DOM html - remove styles, tags, inputs etc 
+        #2. send the filtered DOM to gemini api along with the system prompt
+        #3. parse the json response and if valid 
+        #4. create the form and save it to db and return the same. 
             return JSONResponse(status_code=201, content=result)
         else:
             # No form found and no data to create one
