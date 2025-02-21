@@ -34,7 +34,7 @@ chat_session = model.start_chat(
 try:
     response = chat_session.send_message("hello world, give me some cool json")
     print(response.text)
-    
+  
 except Exception as e:
     print(f"API Error: {e}")
     

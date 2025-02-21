@@ -6,6 +6,9 @@ from fastapi.responses import JSONResponse
 from app.models.form import Form, CreateFormRequest
 from app.mongodb import get_forms
 
+from app.services.clean_html import clean_html
+from app.services.gemini_prompt import get_gemini_response
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -41,11 +44,3 @@ async def get_or_create_form(domain: str, dom: str):
     except Exception as e:
         logger.error(f"Error processing form request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to process form request: {str(e)}")
-
-
-async def find_form_by_domain(domain: str):
-    """
-    Helper function to find a form by domain
-    """
-    forms_collection = get_forms()
-    return await forms_collection.find_one({"domain": domain})
