@@ -7,7 +7,7 @@ from app.models.form import Form, CreateFormRequest
 from app.mongodb import get_forms
 
 from app.services.clean_html import clean_html
-from app.services.gemini_prompt import get_gemini_response
+from app.services.gemini_prompt import form_widget_detection, fill_form_values
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -66,14 +66,12 @@ async def get_or_create_form(domain: str, dom: str, user_prompt: str, custom_com
         if existing_form:
             return JSONResponse(content=existing_form)
         
-        
-        #1. filter out the DOM html - remove styles, tags, inputs etc 
-        #2. send the filtered DOM to gemini api along with the system prompt
-        #3. parse the json response
-        #4. run the querySelectorAll on the DOM to get the form elements, ensure all labels / inputs are captured 
-        #5. create the form and save it to db
-        #6. send the prompt and 
-            return JSONResponse(status_code=201, content=result)
+        if dom:
+            cleaned_dom = clean_html(dom)
+            querySelectorAll = await form_widget_detection(cleaned_dom)
+            ## find document.querySelectorAll(cleaned_dom)
+            ## if there are elements     
+            return JSONResponse(status_code=201, content=querySelectorAll)
         else:
             # No form found and no data to create one
             raise HTTPException(status_code=404, detail=f"Form with domain '{domain}' not found")
@@ -83,3 +81,10 @@ async def get_or_create_form(domain: str, dom: str, user_prompt: str, custom_com
     except Exception as e:
         logger.error(f"Error processing form request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to process form request: {str(e)}")
+#TODO:
+#1. filter out the DOM html - remove styles, tags, inputs etc -- Completed. 
+#2. send the filtered DOM to gemini api along with the system prompt -- Completed. 
+#3. parse the json response
+#4. run the querySelectorAll on the DOM to get the form elements, ensure all labels / inputs are captured 
+#5. create the form and save it to db
+#6. send the prompt and form to gemini api and return the api. 
