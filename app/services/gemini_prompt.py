@@ -8,7 +8,7 @@ generation_config = {
   "temperature": 0.6,
   "top_p": 0.7,
   "top_k": 40,
-  "max_output_tokens": 200,
+  "max_output_tokens": 100,
   "response_mime_type": "application/json",
 }
 
@@ -23,7 +23,7 @@ The output should contain only the queryselector of each section and nothing els
 model = genai.GenerativeModel(
   model_name="gemini-2.0-flash",
   generation_config=generation_config,
-  system_instruction="hi, can you return the string input as a appropiate json?",
+  system_instruction=system_instruction,
 )
 
 chat_session = model.start_chat(
