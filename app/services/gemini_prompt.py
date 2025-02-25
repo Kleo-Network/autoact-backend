@@ -207,7 +207,7 @@ async def fill_form_values(form_elements: List[Dict], history: List[Dict]) -> Li
     try:
         response = await gemini_response(
             system_instruction=system_instruction_form_values,
-            message=json.dumps(form_elements),
+            message=str(json.dumps(form_elements)),
             history=history, 
             config=generation_config_form_values, 
             model="gemini-2.0-flash"

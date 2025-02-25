@@ -6,10 +6,14 @@ from fastapi.responses import JSONResponse
 
 from app.models.form import Form, CreateFormRequest
 from app.mongodb import get_forms
+from fastapi import APIRouter, HTTPException, Query, Body
 
 from app.services.clean_html import clean_html
 from app.services.gemini_prompt import form_widget_detection, extract_form_elements, fill_form_values
 
+from pydantic import BaseModel
+from typing import Optional
+from bson import json_util
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -51,8 +55,18 @@ API response to extension should be in the format
     value: "Value of the Input"
 }] 
 '''
+
+class FormRequest(BaseModel):
+    dom: Optional[str] = None
+    user_prompt: Optional[str] = None
+    custom_command: Optional[str] = None
+
+
 @router.post("/{domain}", response_model=dict)
-async def get_or_create_form(domain: str, dom: str, user_prompt: str, custom_command: str = None):
+async def get_or_create_form(
+    domain: str,
+    form_data: FormRequest = Body(...)
+):
     """
     Get an existing form by domain or create a new one if not found.
     
@@ -61,14 +75,27 @@ async def get_or_create_form(domain: str, dom: str, user_prompt: str, custom_com
     2. If not found, process the DOM to extract form elements
     3. Return the structured form data for the extension
     """
+    dom = form_data.dom
+    user_prompt = form_data.user_prompt
+    custom_command = form_data.custom_command
+    print(domain)
+    
     try:
         # Try to find the form first in the database
         forms_collection = get_forms()
         existing_form = await forms_collection.find_one({"domain": domain})
         
         if existing_form:
+            serialized_form = json.loads(json_util.dumps(existing_form))
+            query_selector = serialized_form.get("mapping", {}).get("querySelectorAll")
+            cleaned_dom = clean_html(dom)
+            form_elements = await extract_form_elements(cleaned_dom, query_selector)
+            form_elements = await fill_form_values(form_elements, [
+                        {"role": "user", "parts": [user_prompt]},
+                        {"role": "user", "parts": [custom_command] if custom_command else ["Please fill this form based on the information provided."]}
+                    ])
             logger.info(f"Found existing form for domain: {domain}")
-            return JSONResponse(content=existing_form)
+            return JSONResponse(content=form_elements)
         
         # Process the DOM if provided
         if dom:

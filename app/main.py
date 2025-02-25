@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.form import router as form_router
 from app.settings import settings
 from app.logging_config import setup_logging, logger
-import redis.asyncio as redis
 from prometheus_fastapi_instrumentator import Instrumentator
 
 # Set up logging
@@ -41,7 +40,6 @@ async def root():
 # Optional: Log startup events
 @app.on_event("startup")
 async def startup_event():
-    app.state.redis = redis.from_url("redis://redis")
     logger.info("Starting up the FastAPI application.")
 
 
@@ -49,4 +47,3 @@ async def startup_event():
 async def shutdown_event():
     logger.info("Shutting down the FastAPI application.")
     await close_db_connection()
-    await app.state.redis.close()
