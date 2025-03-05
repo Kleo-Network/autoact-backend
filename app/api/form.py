@@ -75,6 +75,8 @@ async def get_or_create_form(
     2. If not found, process the DOM to extract form elements
     3. Return the structured form data for the extension
     """
+    print(domain)
+    print(form_data)
     dom = form_data.dom
     user_prompt = form_data.user_prompt
     custom_command = form_data.custom_command
