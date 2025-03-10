@@ -3,6 +3,7 @@ from app.mongodb import close_db_connection
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.form import router as form_router
+from app.api.form_detect import router as form_detect_router
 from app.settings import settings
 from app.logging_config import setup_logging, logger
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -29,6 +30,7 @@ app.add_middleware(
 
 # Include the API routers
 app.include_router(form_router, prefix="/api/v1/form")
+app.include_router(form_detect_router, prefix="/api/v1")
 
 Instrumentator().instrument(app).expose(app)
 
