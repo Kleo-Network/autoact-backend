@@ -30,7 +30,7 @@ app.add_middleware(
 
 # Include the API routers
 app.include_router(form_router, prefix="/api/v1/form")
-app.include_router(form_detect_router, prefix="/api/v1")
+app.include_router(form_detect_router, prefix="/api/v1/detect")
 
 Instrumentator().instrument(app).expose(app)
 

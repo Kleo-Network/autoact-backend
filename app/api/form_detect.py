@@ -69,7 +69,7 @@ async def blacklisted_domains(
         
         if not domain:
             logger.warning(f"Invalid URL provided: {url}")
-            return FormDetectionResponse(form=True)  # Default to true if we can't extract domain
+            return FormDetectionResponse(form=False)  # Default to true if we can't extract domain
         
         # Check if domain exists in the database
         existing_record = await find_form_detection_by_domain(domain)

@@ -1,10 +1,11 @@
 import os
 import json
-import logging
 import google.generativeai as genai # type: ignore
 from google.ai.generativelanguage_v1beta.types import content # type: ignore
 from typing import Dict, Any, List, Union
-
+import re
+import ast
+import logging
 logger = logging.getLogger(__name__)
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
@@ -13,7 +14,7 @@ generation_config_form_values = {
   "temperature": 0.3,  # Lower temperature for more predictable outputs
   "top_p": 0.45,
   "top_k": 70,
-  "max_output_tokens": 1000,
+  "max_output_tokens": 0,  # Will be dynamically set based on form elements length
   "response_schema": {
     "type": "array",
     "items": {
@@ -97,7 +98,7 @@ Your response must be a JSON array where each item contains:
 
 Examples:
 [
-  {"querySelectorInput": "#firstName", "label": "First Name"},
+  {"querySelectorInput": "input[id='some_id']", "label": "First Name"},
   {"querySelectorInput": "input[name='email']", "label": "Email Address"}
 ]
 
@@ -110,7 +111,7 @@ You are a specialized form filler. Given form elements with labels and the user'
 fill in appropriate values for each form field.
 
 Guidelines:
-1. Analyze the user's input carefully to extract relevant information
+1. Analyze the user's input carefully to extract relevant information, fill dummy data where not available
 2. Match the information to the appropriate form fields based on field labels
 3. For fields not explicitly mentioned in the input, provide reasonable defaults
 4. Handle all common input types appropriately (text, email, phone, dates, etc.)
@@ -118,7 +119,7 @@ Guidelines:
 
 Your response must maintain the structure of the input, adding a "value" field to each element:
 [
-  {"querySelectorInput": "#firstName", "label": "First Name", "value": "John"},
+  {"querySelectorInput": "input[id='some_id']", "label": "First Name", "value": "John"},
   {"querySelectorInput": "input[name='email']", "label": "Email Address", "value": "john.doe@example.com"}
 ]
 
@@ -151,9 +152,68 @@ async def form_widget_detection(form_html: str) -> Dict:
         logger.error(f"Error in form widget detection: {str(e)}")
         return {"querySelectorAll": "form *"}  # Fallback to a generic selector
 
-async def extract_form_elements(form_html: str, query_selector: str) -> List[Dict]:
+async def extract_form_elements(form_html: str, query_selector: str, domain: str = "") -> List[Dict]:
     """Extract form elements using the provided query selector"""
     try:
+        # Special handling for Typeform
+        if "typeform" in domain:
+            # Look for window.rendererData in the DOM for Typeform
+            logger.info("Detected typeform domain, using specialized extraction")
+            
+            # Try to find the rendererData in the HTML
+            renderer_data_pattern = r'window\.rendererData\s*=\s*({.+?});'
+            render_data_match = re.search(renderer_data_pattern, form_html, re.DOTALL)
+            
+            if render_data_match:
+                # Get the full rendererData string
+                render_data_str = render_data_match.group(1).strip()
+                # Instead of parsing the entire JSON, use regex to extract just the form object
+                form_pattern = r'form:\s*({.+?"_links":.+?})(?=,\s*(?:messages|hubspotIntegration|intents|integrations|messages):|$)'
+
+                form_match = re.search(form_pattern, render_data_str, re.DOTALL)
+                print(form_match.group(1))
+                if form_match:
+                    form_json_str = form_match.group(1)
+                    logger.info("Successfully extracted form JSON from rendererData")
+                    
+                    # Clean the extracted form JSON
+                    form_json_str = re.sub(r',\s*}', '}', form_json_str)
+                    form_json_str = re.sub(r',\s*]', ']', form_json_str)
+                    
+                    try:
+                        # Try to parse the form JSON
+                        form_data = json.loads(form_json_str)
+                        logger.info("Successfully parsed form JSON")
+                        
+                        # Extract fields from the form data
+                        fields = form_data.get('fields', [])
+                        logger.info(f"Found {len(fields)} form fields")
+                        form_elements = []
+                        
+                        for field in fields:
+                            field_type = field.get('type', '')
+                            field_ref = field.get('ref', '')
+                            field_title = field.get('title', '')
+                            
+                            if field_type and field_ref:
+                                # Create the selector based on the type and ref
+                               
+                                query_selector_input = (f"*[aria-labelledby^=\"{field_type}-{field_ref}\"], "f"*[aria-describedby^=\"{field_type}-{field_ref}\"]")
+                                print(query_selector_input)
+                                print(field_title)
+                                form_elements.append({
+                                    "querySelectorInput": query_selector_input,
+                                    "label": field_title
+                                })
+                        
+                        if form_elements:
+                            logger.info(form_elements)
+                            logger.info(f"Successfully extracted {len(form_elements)} elements from Typeform form data")
+                            return form_elements
+                    except json.JSONDecodeError as je:
+                        pass
+        
+        # Standard extraction for non-Typeform sites
         # Combine the HTML and query selector in a structured message
         message = {
             "html": form_html,
@@ -202,29 +262,61 @@ async def extract_form_elements(form_html: str, query_selector: str) -> List[Dic
             logger.error(f"DOM extraction fallback also failed: {str(inner_e)}")
             return []
 
-async def fill_form_values(form_elements: List[Dict], history: List[Dict]) -> List[Dict]:
+async def fill_form_values(form_elements: List[Dict], history: List[Dict], domain: str = "") -> Union[Dict, List[Dict]]:
     """Fill form values based on user input"""
     try:
+        form_values_config = generation_config_form_values.copy()
+        form_values_config["max_output_tokens"] = len(form_elements) * 200
+        
         response = await gemini_response(
             system_instruction=system_instruction_form_values,
             message=str(json.dumps(form_elements)),
             history=history, 
-            config=generation_config_form_values, 
+            config=form_values_config,  # Use the modified config
             model="gemini-2.0-flash"
         )
+        print(response)
         
         # Parse response to ensure it matches expected format
+        filled_form = None
         if isinstance(response, str):
-            return json.loads(response)
-        
+            filled_form = json.loads(response)
         # Handle when response is already parsed
-        if isinstance(response, list):
-            return response
-            
-        return form_elements  # Return original if parsing fails
+        elif isinstance(response, list):
+            filled_form = response
+        else:
+            filled_form = form_elements  # Return original if parsing fails
+        
+        # Format the response based on domain
+        if "typeform" in domain:
+            # For Typeform domains, use the special format
+            return {
+                "type": "enter",
+                "domain": "typeform.com",
+                "fillJSON": filled_form
+            }
+        else:
+            # For all other domains, use the standard format
+            return {
+                "type": "direct",
+                "domain": domain,
+                "fillJSON": filled_form
+            }
     except Exception as e:
         logger.error(f"Error in form values filling: {str(e)}")
-        return form_elements  # Return original if error occurs
+        # Return in the standard format even on error
+        if "typeform" in domain:
+            return {
+                "type": "enter", 
+                "domain": "typeform.com", 
+                "fillJSON": form_elements
+            }
+        else:
+            return {
+                "type": "direct", 
+                "domain": domain, 
+                "fillJSON": form_elements
+            }
 
 async def gemini_response(
     system_instruction: str = "", 
